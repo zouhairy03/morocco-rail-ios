@@ -10,7 +10,9 @@ final class AppStore: ObservableObject {
     @Published var tickets: [Ticket] = [] { didSet { persist() } }
     @Published var favorites: [RouteShortcut] = [] { didSet { persist() } }
     @Published var recents: [RouteShortcut] = [] { didSet { persist() } }
-    @Published var loyaltyPoints: Int = 1_240 { didSet { persist() } }
+    @Published var loyaltyPoints: Int = 0 { didSet { persist() } }
+    /// True right after a brand-new account is created — drives the how-to tutorial.
+    @Published var showTutorial = false
     @Published var voucherDH: Int = 0 { didSet { persist() } }   // redeemed discount balance
     @Published var invoices: [Invoice] = [] { didSet { persist() } }
     /// Remembered cards (masked: brand + last 4 + expiry only — never the full PAN/CVV).
@@ -61,35 +63,53 @@ final class AppStore: ObservableObject {
     ]
 
     private var loading = false
-
-    /// Reference of the always-live demo trip used to showcase tracking.
-    private let demoRef = "ONCF-7K3Q8X"
+    /// The signed-in account whose data is currently loaded (nil = no one).
+    private var currentUserID: String?
 
     init() {
-        load()
-        refreshDemoTrip()
-        if favorites.isEmpty {
-            favorites = [RouteShortcut(from: "Casa-Voyageurs", to: "Rabat-Agdal")]
-        }
+        // Data is per-account; it loads in `activate(...)` once a user signs in.
     }
 
-    /// Keep the demo trip currently *in transit* so "Suivi" always shows a live,
-    /// real-paced train. Real bookings (other references) are never touched.
-    private func refreshDemoTrip() {
-        guard let casa = station("Casa-Voyageurs"), let tng = station("Tanger-Ville") else { return }
-        let now = Date()
-        let j = Journey(from: casa, to: tng,
-                        depart: now.addingTimeInterval(-35 * 60),   // departed 35 min ago
-                        arrive: now.addingTimeInterval(95 * 60),    // ~2h10 total trip
-                        type: .alBoraq, basePrice: 149, seatsLeft: 12)
-        let me = Passenger(name: memberName, type: .adulte, seat: "22A")
-        let demo = Ticket(reference: demoRef, outbound: j, returnTrip: nil, travelers: [me],
-                          fareClass: .first, discount: .tarifa, coach: 4, purchasedAt: now)
-        if let idx = tickets.firstIndex(where: { $0.reference == demoRef }) {
-            tickets[idx] = demo
-        } else if tickets.isEmpty {
-            tickets = [demo]
+    // MARK: Per-account session
+
+    /// Load (or create) the data belonging to a specific account. Each e-mail
+    /// gets its own isolated dashboard — tickets, loyalty, cards, etc.
+    func activate(userID: String, name: String) {
+        memberName = name.isEmpty ? "Voyageur" : name
+        guard userID != currentUserID else { return }
+        currentUserID = userID
+        loadCurrentUser()
+    }
+
+    /// Clear the in-memory dashboard on sign-out so the next account starts clean.
+    func signOutData() {
+        currentUserID = nil
+        loading = true
+        tickets = []; favorites = []; recents = []; invoices = []
+        savedCards = []; reductionCard = nil
+        loyaltyPoints = 0; voucherDH = 0
+        showTutorial = false
+        loading = false
+    }
+
+    private func loadCurrentUser() {
+        loading = true
+        tickets = []; favorites = []; recents = []; invoices = []
+        savedCards = []; reductionCard = nil
+        loyaltyPoints = 0; voucherDH = 0
+        var isNew = true
+        if let data = try? Data(contentsOf: fileURL),
+           let s = try? JSONDecoder().decode(Persisted.self, from: data) {
+            // Returning account → restore its own data (strip any legacy demo ticket).
+            isNew = false
+            tickets = s.tickets.filter { $0.reference != "ONCF-7K3Q8X" }
+            favorites = s.favorites; recents = s.recents
+            loyaltyPoints = s.points; invoices = s.invoices ?? []; voucherDH = s.voucher ?? 0
+            savedCards = s.cards ?? []; reductionCard = s.reduction
         }
+        showTutorial = isNew                 // tutorial only for brand-new accounts
+        loading = false
+        persist()                            // save cleaned state / create the empty file
     }
 
     func station(_ name: String) -> Station? { stations.first { $0.name == name } }
@@ -302,9 +322,14 @@ final class AppStore: ObservableObject {
         var points: Int; var invoices: [Invoice]?; var voucher: Int?; var cards: [SavedCard]?
         var reduction: ReductionCard?
     }
+    /// One file per account so each e-mail has an isolated dashboard.
     private var fileURL: URL {
-        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("oncf_state.json")
+        let id = currentUserID ?? "guest"
+        let safe = String(id.unicodeScalars.map {
+            CharacterSet.alphanumerics.contains($0) ? Character($0) : "_"
+        })
+        return FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("oncf_state_\(safe).json")
     }
     private func persist() {
         guard !loading else { return }
@@ -312,13 +337,5 @@ final class AppStore: ObservableObject {
                               points: loyaltyPoints, invoices: invoices, voucher: voucherDH,
                               cards: savedCards, reduction: reductionCard)
         if let data = try? JSONEncoder().encode(state) { try? data.write(to: fileURL) }
-    }
-    private func load() {
-        loading = true; defer { loading = false }
-        guard let data = try? Data(contentsOf: fileURL),
-              let s = try? JSONDecoder().decode(Persisted.self, from: data) else { return }
-        tickets = s.tickets; favorites = s.favorites; recents = s.recents
-        loyaltyPoints = s.points; invoices = s.invoices ?? []; voucherDH = s.voucher ?? 0
-        savedCards = s.cards ?? []; reductionCard = s.reduction
     }
 }

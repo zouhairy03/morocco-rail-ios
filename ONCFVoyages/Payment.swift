@@ -19,12 +19,12 @@ enum PaymentError: LocalizedError {
     case declined, cancelled, insufficientFunds, expiredCard, threeDSecureFailed, network
     var errorDescription: String? {
         switch self {
-        case .declined:          return "Paiement refusé par la banque."
-        case .cancelled:         return "Paiement annulé."
-        case .insufficientFunds: return "Fonds insuffisants sur la carte."
-        case .expiredCard:       return "Carte expirée."
-        case .threeDSecureFailed:return "Échec de l'authentification 3-D Secure."
-        case .network:           return "Connexion au service de paiement impossible."
+        case .declined:          return L("Paiement refusé par la banque.")
+        case .cancelled:         return L("Paiement annulé.")
+        case .insufficientFunds: return L("Fonds insuffisants sur la carte.")
+        case .expiredCard:       return L("Carte expirée.")
+        case .threeDSecureFailed:return L("Échec de l'authentification 3-D Secure.")
+        case .network:           return L("Connexion au service de paiement impossible.")
         }
     }
 }

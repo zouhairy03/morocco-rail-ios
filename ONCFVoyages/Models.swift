@@ -43,6 +43,16 @@ enum TrainStatus: Equatable {
 
     var isStopped: Bool { if case .stopped = self { return true } else { return false } }
 
+    /// Stable discriminator used to de-duplicate disruption notifications.
+    var notifKey: String {
+        switch self {
+        case .onTime: return "ontime"
+        case .delayed(let m): return "delay\(m)"
+        case .disrupted: return "disrupt"
+        case .stopped: return "stopped"
+        }
+    }
+
     /// Human reason for disrupted / stopped states.
     var detail: String? {
         switch self {

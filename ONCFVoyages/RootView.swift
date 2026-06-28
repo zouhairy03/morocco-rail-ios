@@ -6,6 +6,8 @@
 import SwiftUI
 
 struct RootView: View {
+    @EnvironmentObject var store: AppStore
+    @EnvironmentObject var auth: AuthViewModel
     @State private var selection = RootView.initialTab
     @AppStorage("seenOnboarding") private var seenOnboarding = false
     @State private var onboardingDone = false
@@ -54,6 +56,11 @@ struct RootView: View {
             }
         }
         .animation(.easeInOut(duration: 0.25), value: conn.isOnline)
+        .fullScreenCover(isPresented: $store.showTutorial) {
+            WelcomeFlowView(name: auth.user?.name ?? store.memberName) {
+                store.showTutorial = false; selection = 0
+            }
+        }
     }
 }
 

@@ -40,7 +40,7 @@ struct PaymentSheet: View {
                             .foregroundStyle(.white)
                             .padding(.horizontal, 8).padding(.vertical, 3)
                             .background(Brand.clay, in: Capsule())
-                            Text("MONTANT À PAYER").font(.system(size: 10, weight: .semibold)).foregroundStyle(Brand.textSoft)
+                            Text(L("MONTANT À PAYER")).font(.system(size: 10, weight: .semibold)).foregroundStyle(Brand.textSoft)
                             Text(Fmt.price(amount)).font(.system(size: 40, weight: .heavy, design: .rounded)).foregroundStyle(Brand.label)
                             Text(L("Mode test · aucun argent réel")).font(.caption).foregroundStyle(Brand.textSoft)
                         }.frame(maxWidth: .infinity)
@@ -51,7 +51,7 @@ struct PaymentSheet: View {
                             .frame(height: 50)
                             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                             .allowsHitTesting(!busy)
-                        HStack { line; Text("ou par carte").font(.caption).foregroundStyle(Brand.textSoft); line }
+                        HStack { line; Text(L("ou par carte")).font(.caption).foregroundStyle(Brand.textSoft); line }
                     }
 
                     if !store.savedCards.isEmpty { savedCardsSection }
@@ -88,17 +88,17 @@ struct PaymentSheet: View {
                     .buttonStyle(PrimaryButtonStyle())
                     .disabled(busy)
 
-                    Label("Chiffré · 3-D Secure", systemImage: "lock.fill")
+                    Label(L("Chiffré · 3-D Secure"), systemImage: "lock.fill")
                         .font(.caption2).foregroundStyle(Brand.textSoft)
                 }
                 .padding(20)
             }
             .background(Brand.sand.ignoresSafeArea())
-            .navigationTitle("Paiement")
+            .navigationTitle(L("Paiement"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Annuler") { dismiss() }.disabled(busy)
+                    Button(L("Annuler")) { dismiss() }.disabled(busy)
                 }
             }
         }
@@ -143,9 +143,9 @@ struct PaymentSheet: View {
 
         // New card: validate then charge.
         let digits = card.filter(\.isNumber)
-        guard digits.count >= 13, luhn(digits) else { error = "Numéro de carte invalide."; return }
-        guard expiryValid(expiry) else { error = "Date d'expiration invalide (MM/AA)."; return }
-        guard cvv.filter(\.isNumber).count >= 3 else { error = "Code CVV invalide."; return }
+        guard digits.count >= 13, luhn(digits) else { error = L("Numéro de carte invalide."); return }
+        guard expiryValid(expiry) else { error = L("Date d'expiration invalide (MM/AA)."); return }
+        guard cvv.filter(\.isNumber).count >= 3 else { error = L("Code CVV invalide."); return }
         stage = (SandboxCard(rawValue: digits) == .threeDSecure) ? L("3-D Secure…") : ""
         let masked = saveCard ? SavedCard(brand: brand, last4: String(digits.suffix(4)), expiry: expiry) : nil
         authorizeAndFinish(method: .card, pan: digits, save: masked)
@@ -164,7 +164,7 @@ struct PaymentSheet: View {
             } catch {
                 busy = false; stage = ""
                 Haptics.error()
-                self.error = (error as? LocalizedError)?.errorDescription ?? "Paiement échoué."
+                self.error = (error as? LocalizedError)?.errorDescription ?? L("Paiement échoué.")
             }
         }
     }
@@ -290,7 +290,7 @@ struct PaymentSheet: View {
 
     private func field(_ label: String, text: Binding<String>, placeholder: String) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(label.uppercased()).font(.system(size: 10, weight: .semibold)).foregroundStyle(Brand.textSoft)
+            Text(L(label).uppercased()).font(.system(size: 10, weight: .semibold)).foregroundStyle(Brand.textSoft)
             TextField(placeholder, text: text)
                 .keyboardType(.numbersAndPunctuation)
                 .padding(.vertical, 11).padding(.horizontal, 13)

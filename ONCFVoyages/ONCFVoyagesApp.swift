@@ -58,10 +58,11 @@ struct Gate: View {
         .animation(.easeInOut(duration: 0.2), value: lock.locked)
         .onAppear {
             UNUserNotificationCenter.current().delegate = NotificationDelegate.shared
-            if let u = auth.user { store.memberName = u.name; lock.lockIfNeeded() }
+            if let u = auth.user { store.activate(userID: u.id, name: u.name); lock.lockIfNeeded() }
         }
         .onChange(of: auth.user) { newValue in
-            if let u = newValue { store.memberName = u.name; lock.lockIfNeeded() }
+            if let u = newValue { store.activate(userID: u.id, name: u.name); lock.lockIfNeeded() }
+            else { store.signOutData() }
         }
     }
 }

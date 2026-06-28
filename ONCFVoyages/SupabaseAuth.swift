@@ -56,7 +56,10 @@ final class SupabaseAuthService: AuthService {
 
     private func request(_ path: String, method: String = "POST",
                          body: [String: Any]? = nil, bearer: String? = nil) async throws -> Data {
-        var req = URLRequest(url: SupabaseConfig.base.appendingPathComponent(path))
+        // Build via string so query strings (e.g. token?grant_type=password) survive —
+        // appendingPathComponent would percent-encode the "?" into the path → 404.
+        guard let url = URL(string: SupabaseConfig.url + "/" + path) else { throw SupabaseError.server("URL invalide.") }
+        var req = URLRequest(url: url)
         req.httpMethod = method
         req.setValue(SupabaseConfig.anonKey, forHTTPHeaderField: "apikey")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")

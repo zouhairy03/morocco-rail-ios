@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import CoreLocation
 
 struct HomeView: View {
     @EnvironmentObject var store: AppStore
@@ -14,6 +15,22 @@ struct HomeView: View {
     @State private var trip: TripKind = .round
     @State private var go = false
     @AppStorage("serviceAlertsEnabled") private var serviceAlerts = true
+    @ObservedObject private var loc = LocationManager.shared
+    @State private var didAutoSetFrom = false
+    @State private var nearestKm: Double?
+    @State private var nearestName: String?
+
+    /// Closest station to the phone (name + distance in km).
+    private func nearestStation() -> (name: String, km: Double)? {
+        guard let here = loc.location else { return nil }
+        var best: (String, Double)?
+        for s in store.stations {
+            guard let c = StationGeo.coordinate(s.name) else { continue }
+            let d = here.distance(from: CLLocation(latitude: c.latitude, longitude: c.longitude)) / 1000
+            if best == nil || d < best!.1 { best = (s.name, d) }
+        }
+        return best
+    }
 
     var body: some View {
         NavigationStack {
@@ -44,6 +61,15 @@ struct HomeView: View {
                 if let f = store.station(from), let t = store.station(to) {
                     ResultsView(from: f, to: t, date: date, trip: trip, passengers: passengers)
                 }
+            }
+            .onAppear { loc.startIfAuthorized() }   // never prompts; uses location only if already granted
+            .onChange(of: loc.location) { _ in
+                // First location fix → default the departure to the nearest station.
+                guard !didAutoSetFrom, let n = nearestStation() else { return }
+                didAutoSetFrom = true
+                nearestKm = n.km
+                nearestName = n.name
+                if n.name != to { from = n.name }
             }
         }
     }
@@ -101,6 +127,12 @@ struct HomeView: View {
                 .pickerStyle(.segmented)
 
                 cityField(label: L("Départ"), selection: $from, dot: Brand.textSoft)
+                if let km = nearestKm, from == nearestName {
+                    let d = km < 1 ? String(format: "%.0f m", km * 1000) : String(format: "%.0f km", km)
+                    Label(String(format: L("Gare la plus proche · %@ de vous"), d), systemImage: "location.fill")
+                        .font(.caption2).foregroundStyle(Brand.clay)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
                 ZStack {
                     Divider()
                     Button {
@@ -125,8 +157,14 @@ struct HomeView: View {
                     Spacer()
                     VStack(alignment: .leading, spacing: 4) {
                         Text(L("Voyageurs").uppercased()).font(.system(size: 10, weight: .semibold)).foregroundStyle(Brand.textSoft)
-                        Stepper("\(passengers)", value: $passengers, in: 1...9)
-                            .fixedSize()
+                        HStack(spacing: 12) {
+                            stepButton("minus", enabled: passengers > 1) { passengers -= 1 }
+                            Text("\(passengers)")
+                                .font(.system(.body, design: .rounded).weight(.bold))
+                                .foregroundStyle(Brand.label).frame(minWidth: 18)
+                                .contentTransition(.numericText())
+                            stepButton("plus", enabled: passengers < 9) { passengers += 1 }
+                        }
                     }
                 }
 
@@ -240,6 +278,18 @@ struct HomeView: View {
                 .padding(.horizontal, 2).padding(.bottom, 6)
             }
         }
+    }
+
+    private func stepButton(_ icon: String, enabled: Bool, _ action: @escaping () -> Void) -> some View {
+        Button {
+            action(); Haptics.select()
+        } label: {
+            Image(systemName: icon).font(.subheadline.weight(.bold)).foregroundStyle(.white)
+                .frame(width: 32, height: 32)
+                .background(enabled ? Brand.orange : Color.black.opacity(0.15), in: Circle())
+        }
+        .disabled(!enabled)
+        .accessibilityLabel(Text(icon == "plus" ? L("Ajouter un voyageur") : L("Retirer un voyageur")))
     }
 
     private func destinationCard(_ city: String, _ sub: String, _ image: String) -> some View {

@@ -13,10 +13,13 @@ private struct Stop: Identifiable {
     let name: String
     let time: Date
     let position: CGFloat
+    var dwell: Int = 0   // minutes the train stops at this station (0 = terminus)
+    var voie: Int = 1    // platform / track number
 }
 
 struct TrackView: View {
     @EnvironmentObject var store: AppStore
+    @ObservedObject private var loc = LocationManager.shared
     @State private var now = Date()
     @State private var showMap = false
     // Ticks once a second — the train position is derived from the real clock,
@@ -47,8 +50,18 @@ struct TrackView: View {
         let n = names.count
         return names.enumerated().map { (i, nm) in
             let pos = n <= 1 ? 0 : CGFloat(i) / CGFloat(n - 1)
-            return Stop(name: nm, time: dep.addingTimeInterval(dur * Double(pos)), position: pos)
+            // Intermediate stations have a short dwell; origin & terminus don't.
+            let dwell = (i == 0 || i == n - 1) ? 0 : 2
+            // Stable platform number per station per trip.
+            let voie = (nm + t.reference).unicodeScalars.reduce(0) { $0 + Int($1.value) } % 8 + 1
+            return Stop(name: nm, time: dep.addingTimeInterval(dur * Double(pos)),
+                        position: pos, dwell: dwell, voie: voie)
         }
+    }
+
+    /// Index of the next station the train will reach (for the "next stop" highlight).
+    private func nextStopIndex(_ stops: [Stop], progress: CGFloat) -> Int? {
+        stops.firstIndex { progress < $0.position }
     }
 
     var body: some View {
@@ -61,8 +74,10 @@ struct TrackView: View {
                         guard let c = StationGeo.coordinate(s.name) else { return nil }
                         return RouteMapView.Stop(id: s.name, coord: c)
                     }
+                    let trainCoord = RouteMapView.interpolate(mapStops, Double(p))
+                    let distKm = trainCoord.flatMap { loc.distanceKm(to: $0) }
                     VStack(spacing: 20) {
-                        statusCard(t, status: status, progress: p)
+                        statusCard(t, status: status, progress: p, distanceKm: distKm)
                         if mapStops.count >= 2 {
                             routeMapCard(mapStops,
                                          trainProgress: Double((p * 200).rounded() / 200),
@@ -84,7 +99,24 @@ struct TrackView: View {
             .navigationTitle(L("Suivi en direct"))
             .navigationBarTitleDisplayMode(.inline)
         }
-        .onReceive(timer) { now = $0 }
+        .onAppear {
+            loc.request()
+            if let t = ticket {
+                NotificationService.notifyDisruption(for: t, status: store.liveStatus(for: t))
+            }
+        }
+        .onReceive(timer) { t in
+            now = t
+            // "Get ready" alert when the destination is ~5 min away.
+            if let tk = ticket {
+                let s = store.liveStatus(for: tk)
+                let arrival = tk.outbound.arrive.addingTimeInterval(Double(s.delayMinutes) * 60)
+                let remMin = arrival.timeIntervalSince(t) / 60
+                if t >= tk.outbound.depart, remMin > 0, remMin <= 5 {
+                    NotificationService.notifyArrivalSoon(for: tk)
+                }
+            }
+        }
         .fullScreenCover(isPresented: $showMap) {
             if let t = ticket {
                 let s = stops(for: t).compactMap { st -> RouteMapView.Stop? in
@@ -116,7 +148,7 @@ struct TrackView: View {
         }
     }
 
-    private func statusCard(_ t: Ticket, status: TrainStatus, progress: CGFloat) -> some View {
+    private func statusCard(_ t: Ticket, status: TrainStatus, progress: CGFloat, distanceKm: Double?) -> some View {
         let maxSpeed = t.outbound.type.isHighSpeed ? 320 : 160
         let stopped = status.isStopped
         let arrival = t.outbound.arrive.addingTimeInterval(Double(status.delayMinutes) * 60)
@@ -168,6 +200,11 @@ struct TrackView: View {
                             : "\(L("Départ dans")) \(toDeparture / 60)h\(String(format: "%02d", toDeparture % 60))"))
                         .font(.caption).foregroundStyle(.white.opacity(0.8))
                 }
+                if let km = distanceKm {
+                    let d = km < 1 ? String(format: "%.0f m", km * 1000) : String(format: "%.0f km", km)
+                    Label(String(format: L("À %@ de votre train"), d), systemImage: "location.fill")
+                        .font(.caption2).foregroundStyle(.white.opacity(0.7))
+                }
                 if let detail = status.detail {
                     HStack(alignment: .top, spacing: 8) {
                         Image(systemName: "info.circle.fill").font(.caption2).foregroundStyle(sColor)
@@ -214,6 +251,7 @@ struct TrackView: View {
     private func timeline(_ stops: [Stop], status: TrainStatus, progress: CGFloat) -> some View {
         let stopped = status.isStopped
         let marker = stopped ? statusColor(status) : Brand.orange
+        let next = nextStopIndex(stops, progress: progress)
         return Card {
             HStack(alignment: .top, spacing: 0) {
                 GeometryReader { geo in
@@ -240,19 +278,37 @@ struct TrackView: View {
 
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(Array(stops.enumerated()), id: \.element.id) { idx, s in
+                        let passed = progress >= s.position
+                        let isNext = (next == idx)
                         HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(s.name)
-                                    .font(.system(.subheadline, design: .rounded).weight(.semibold))
-                                    .foregroundStyle(progress >= s.position ? Brand.label : Brand.textSoft)
-                                Text(Fmt.time.string(from: s.time)).font(.caption2).foregroundStyle(Brand.textSoft)
+                            VStack(alignment: .leading, spacing: 3) {
+                                HStack(spacing: 6) {
+                                    Text(s.name)
+                                        .font(.system(.subheadline, design: .rounded).weight(isNext ? .bold : .semibold))
+                                        .foregroundStyle(passed ? Brand.label : (isNext ? Brand.orange : Brand.textSoft))
+                                    if isNext {
+                                        Text(L("Prochain arrêt"))
+                                            .font(.system(size: 8, weight: .bold)).tracking(0.5).foregroundStyle(.white)
+                                            .padding(.horizontal, 6).padding(.vertical, 2)
+                                            .background(Brand.orange, in: Capsule())
+                                    }
+                                }
+                                HStack(spacing: 10) {
+                                    Text(Fmt.time.string(from: s.time)).font(.caption2).foregroundStyle(Brand.textSoft)
+                                    Text("\(L("Voie")) \(s.voie)").font(.system(size: 10, weight: .semibold))
+                                        .foregroundStyle(isNext ? Brand.orange : Brand.textSoft)
+                                    if s.dwell > 0 {
+                                        Label(String(format: L("Arrêt %d min"), s.dwell), systemImage: "pause.circle")
+                                            .font(.system(size: 10)).foregroundStyle(Brand.textSoft)
+                                    }
+                                }
                             }
                             Spacer()
-                            if progress >= s.position {
+                            if passed {
                                 Image(systemName: "checkmark").font(.caption.weight(.bold)).foregroundStyle(Brand.orange)
                             }
                         }
-                        .frame(height: idx == stops.count - 1 ? 40 : 70, alignment: .top)
+                        .frame(height: idx == stops.count - 1 ? 44 : 72, alignment: .top)
                     }
                 }
             }
@@ -347,6 +403,7 @@ struct RouteMapView: View {
     var body: some View {
         Map(coordinateRegion: .constant(Self.framingRegion(stops)),
             interactionModes: [],
+            showsUserLocation: true,
             annotationItems: Self.annotations(stops, trainProgress)) { p in
             MapAnnotation(coordinate: p.coord) { RouteAnnotationView(point: p, stopped: stopped) }
         }
@@ -363,8 +420,7 @@ struct FullRouteMapView: View {
     var route: String
 
     @Environment(\.dismiss) private var dismiss
-    @State private var region = MKCoordinateRegion()
-    @State private var ready = false
+    @State private var recenterTrigger = 0
     @State private var now = Date()
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
@@ -394,23 +450,18 @@ struct FullRouteMapView: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            Map(coordinateRegion: $region, interactionModes: .all,
-                annotationItems: RouteMapView.annotations(stops, Double(progress))) { p in
-                MapAnnotation(coordinate: p.coord) { RouteAnnotationView(point: p, stopped: stopped) }
-            }
-            .ignoresSafeArea()
+            RailMapView(stops: stops,
+                        trainProgress: Double((progress * 200).rounded() / 200),
+                        stopped: stopped,
+                        interactive: true,
+                        recenter: recenterTrigger)
+                .ignoresSafeArea()
 
             header
 
             VStack {
                 Spacer()
-                Button {
-                    if let c = RouteMapView.interpolate(stops, Double(progress)) {
-                        withAnimation(.easeInOut) {
-                            region = MKCoordinateRegion(center: c, span: .init(latitudeDelta: 1.1, longitudeDelta: 1.1))
-                        }
-                    }
-                } label: {
+                Button { recenterTrigger += 1; Haptics.tap() } label: {
                     Label(L("Centrer sur le train"), systemImage: "scope")
                         .font(.subheadline.weight(.semibold)).foregroundStyle(.white)
                         .padding(.vertical, 12).padding(.horizontal, 18)
@@ -420,7 +471,6 @@ struct FullRouteMapView: View {
                 .padding(.bottom, 34)
             }
         }
-        .onAppear { if !ready { region = RouteMapView.framingRegion(stops); ready = true } }
         .onReceive(timer) { now = $0 }
     }
 

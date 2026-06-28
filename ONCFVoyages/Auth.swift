@@ -23,10 +23,10 @@ enum AuthError: LocalizedError {
     case invalidCredentials, emailTaken, weakPassword, invalidEmail
     var errorDescription: String? {
         switch self {
-        case .invalidCredentials: return "E-mail ou mot de passe incorrect."
-        case .emailTaken: return "Un compte existe déjà avec cet e-mail."
-        case .weakPassword: return "Le mot de passe doit faire au moins 6 caractères."
-        case .invalidEmail: return "Adresse e-mail invalide."
+        case .invalidCredentials: return L("E-mail ou mot de passe incorrect.")
+        case .emailTaken: return L("Un compte existe déjà avec cet e-mail.")
+        case .weakPassword: return L("Le mot de passe doit faire au moins 6 caractères.")
+        case .invalidEmail: return L("Adresse e-mail invalide.")
         }
     }
 }

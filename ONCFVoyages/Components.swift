@@ -106,7 +106,7 @@ struct BoardingPass: View {
                 Text("ONCF ").font(.system(.headline, design: .rounded).weight(.bold)).foregroundColor(.white)
                 + Text("voyages").font(.system(.headline, design: .rounded)).foregroundColor(.white.opacity(0.7))
                 Spacer()
-                Text(ticket.isRoundTrip ? "ALLER-RETOUR" : "ALLER SIMPLE")
+                Text(L(ticket.isRoundTrip ? "ALLER-RETOUR" : "ALLER SIMPLE"))
                     .font(.system(size: 9, weight: .bold)).tracking(1)
                     .foregroundStyle(.white.opacity(0.7))
             }
@@ -164,7 +164,7 @@ struct BoardingPass: View {
 
     private func info(_ label: String, _ value: String) -> some View {
         VStack(spacing: 3) {
-            Text(label).font(.system(size: 8.5, weight: .semibold)).foregroundStyle(Brand.textSoft)
+            Text(L(label)).font(.system(size: 8.5, weight: .semibold)).foregroundStyle(Brand.textSoft)
             Text(value).font(.system(.subheadline, design: .rounded).weight(.bold)).foregroundStyle(Brand.label)
         }
         .frame(maxWidth: .infinity)

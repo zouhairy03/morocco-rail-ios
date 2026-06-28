@@ -41,6 +41,15 @@ struct ConfirmationView: View {
 struct TicketsView: View {
     @EnvironmentObject var store: AppStore
 
+    private var upcoming: [Ticket] {
+        store.tickets.filter { $0.outbound.arrive >= Date() }
+            .sorted { $0.outbound.depart < $1.outbound.depart }
+    }
+    private var past: [Ticket] {
+        store.tickets.filter { $0.outbound.arrive < Date() }
+            .sorted { $0.outbound.depart > $1.outbound.depart }
+    }
+
     var body: some View {
         NavigationStack {
             Group {
@@ -49,9 +58,13 @@ struct TicketsView: View {
                 } else {
                     ScrollView {
                         VStack(spacing: 16) {
-                            ForEach(store.tickets) { t in
-                                NavigationLink { TicketDetailView(ticket: t) } label: { BoardingPass(ticket: t) }
-                                    .buttonStyle(.plain)
+                            if !upcoming.isEmpty {
+                                sectionHeader(L("À venir"), count: upcoming.count)
+                                ForEach(upcoming) { ticketLink($0) }
+                            }
+                            if !past.isEmpty {
+                                sectionHeader(L("Passés"), count: past.count)
+                                ForEach(past) { ticketLink($0).opacity(0.65) }
                             }
                         }
                         .padding(18)
@@ -63,11 +76,28 @@ struct TicketsView: View {
         }
     }
 
+    private func ticketLink(_ t: Ticket) -> some View {
+        NavigationLink { TicketDetailView(ticket: t) } label: { BoardingPass(ticket: t) }
+            .buttonStyle(.plain)
+    }
+
+    private func sectionHeader(_ title: String, count: Int) -> some View {
+        HStack {
+            Text(title.uppercased()).font(.caption.weight(.bold)).tracking(1).foregroundStyle(Brand.textSoft)
+            Text("\(count)").font(.caption2.weight(.bold)).foregroundStyle(Brand.clay)
+                .padding(.horizontal, 7).padding(.vertical, 2)
+                .background(Brand.clay.opacity(0.12), in: Capsule())
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.top, 4)
+    }
+
     private var emptyState: some View {
         VStack(spacing: 12) {
             Image(systemName: "ticket").font(.system(size: 48)).foregroundStyle(Brand.textSoft)
             Text(L("Aucun billet")).font(.headline).foregroundStyle(Brand.label)
-            Text("Réservez un voyage depuis l'accueil.").font(.subheadline).foregroundStyle(Brand.textSoft)
+            Text(L("Réservez un voyage depuis l'accueil.")).font(.subheadline).foregroundStyle(Brand.textSoft)
         }
     }
 }
@@ -81,6 +111,7 @@ struct TicketDetailView: View {
     @State private var reminderOn = false
     @State private var showCancel = false
     @State private var share: ShareItem?
+    @State private var walletError: String?
 
     var body: some View {
         ScrollView {
@@ -89,7 +120,7 @@ struct TicketDetailView: View {
 
                 Card {
                     VStack(spacing: 14) {
-                        Text("EMBARQUEMENT").font(.system(size: 10, weight: .bold)).tracking(1).foregroundStyle(Brand.textSoft)
+                        Text(L("EMBARQUEMENT")).font(.system(size: 10, weight: .bold)).tracking(1).foregroundStyle(Brand.textSoft)
                         QRCodeView(string: "ONCF|\(ticket.reference)|\(ticket.passengerName)", size: 170)
                         Text(ticket.reference)
                             .font(.system(.headline, design: .rounded).weight(.bold))
@@ -114,14 +145,17 @@ struct TicketDetailView: View {
         .navigationTitle(L("Billet"))
         .navigationBarTitleDisplayMode(.inline)
         .sheet(item: $share) { item in ShareSheet(items: [item.url]) }
-        .confirmationDialog("Annuler ce billet ?", isPresented: $showCancel, titleVisibility: .visible) {
+        .alert("Apple Wallet", isPresented: Binding(get: { walletError != nil }, set: { if !$0 { walletError = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: { Text(walletError ?? "") }
+        .confirmationDialog(L("Annuler ce billet ?"), isPresented: $showCancel, titleVisibility: .visible) {
             let q = store.refundQuote(for: ticket)
-            Button(q.refund > 0 ? "Annuler · remboursé \(Fmt.price(q.refund))" : "Annuler (non remboursé)",
+            Button(q.refund > 0 ? String(format: L("Annuler · remboursé %@"), Fmt.price(q.refund)) : L("Annuler (non remboursé)"),
                    role: .destructive) {
                 store.cancel(ticket)
                 dismiss()
             }
-            Button("Garder mon billet", role: .cancel) {}
+            Button(L("Garder mon billet"), role: .cancel) {}
         } message: {
             Text(store.refundQuote(for: ticket).label)
         }
@@ -130,17 +164,17 @@ struct TicketDetailView: View {
     private var travelersCard: some View {
         Card {
             VStack(alignment: .leading, spacing: 10) {
-                Text("VOYAGEURS").font(.system(size: 10, weight: .bold)).foregroundStyle(Brand.textSoft)
+                Text(L("VOYAGEURS")).font(.system(size: 10, weight: .bold)).foregroundStyle(Brand.textSoft)
                 ForEach(ticket.travelers) { p in
                     HStack(spacing: 10) {
                         Image(systemName: p.type.icon).font(.caption).foregroundStyle(Brand.orange)
                             .frame(width: 26, height: 26).background(Brand.orange.opacity(0.12), in: Circle())
                         VStack(alignment: .leading, spacing: 1) {
                             Text(p.name).font(.system(.subheadline, design: .rounded).weight(.semibold)).foregroundStyle(Brand.label)
-                            Text(p.type.rawValue).font(.caption2).foregroundStyle(Brand.textSoft)
+                            Text(p.type.localized).font(.caption2).foregroundStyle(Brand.textSoft)
                         }
                         Spacer()
-                        Text("Voit. \(ticket.coach) · \(p.seat)").font(.caption.weight(.semibold)).foregroundStyle(Brand.label)
+                        Text(String(format: L("Voit. %d · %@"), ticket.coach, p.seat)).font(.caption.weight(.semibold)).foregroundStyle(Brand.label)
                     }
                 }
             }
@@ -156,11 +190,25 @@ struct TicketDetailView: View {
             }
             .buttonStyle(PrimaryButtonStyle())
 
+            Button {
+                Haptics.tap()
+                Task {
+                    do { try await WalletService.add(ticket) }
+                    catch { walletError = (error as? LocalizedError)?.errorDescription ?? "Erreur" }
+                }
+            } label: {
+                Label(L("Ajouter à Apple Wallet"), systemImage: "wallet.pass.fill")
+                    .font(.subheadline.weight(.semibold))
+                    .frame(maxWidth: .infinity).padding(.vertical, 14)
+                    .background(Brand.ink, in: Capsule())
+                    .foregroundStyle(.white)
+            }
+
             HStack(spacing: 12) {
                 Button {
                     NotificationService.scheduleReminder(for: ticket) { ok in reminderOn = ok }
                 } label: {
-                    Label(reminderOn ? "Rappel activé" : L("Me rappeler"),
+                    Label(reminderOn ? L("Rappel activé") : L("Me rappeler"),
                           systemImage: reminderOn ? "bell.fill" : "bell")
                         .font(.subheadline.weight(.semibold))
                         .frame(maxWidth: .infinity).padding(.vertical, 13)
@@ -189,7 +237,7 @@ struct TicketDetailView: View {
 
     private func label(_ t: String, _ v: String, trailing: Bool = false) -> some View {
         VStack(alignment: trailing ? .trailing : .leading, spacing: 2) {
-            Text(t.uppercased()).font(.system(size: 9, weight: .semibold)).foregroundStyle(Brand.textSoft)
+            Text(L(t).uppercased()).font(.system(size: 9, weight: .semibold)).foregroundStyle(Brand.textSoft)
             Text(v).font(.system(.subheadline, design: .rounded).weight(.bold)).foregroundStyle(Brand.label)
         }
     }
@@ -199,7 +247,7 @@ struct TicketDetailView: View {
             Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Brand.orange)
             VStack(alignment: .leading, spacing: 4) {
                 Text(L("À SAVOIR")).font(.system(size: 10, weight: .bold)).foregroundStyle(Brand.clay)
-                Text("Présentez-vous 20 min avant le départ, muni d'une pièce d'identité valide. Billet nominatif et non cessible · échange & annulation gratuits jusqu'à 1h avant le départ.")
+                Text(L("Présentez-vous 20 min avant le départ, muni d'une pièce d'identité valide. Billet nominatif et non cessible · échange & annulation gratuits jusqu'à 1h avant le départ."))
                     .font(.caption).foregroundStyle(Brand.textSoft)
             }
         }

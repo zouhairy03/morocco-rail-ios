@@ -48,6 +48,55 @@ enum NotificationService {
         }
     }
 
+    /// Push a one-off alert when the tracked train is delayed / disrupted / stopped.
+    /// De-duplicated per ticket + status so the user isn't spammed.
+    static func notifyDisruption(for ticket: Ticket, status: TrainStatus) {
+        guard !status.isNormal else { return }
+        let route = "\(ticket.outbound.from.name) → \(ticket.outbound.to.name)"
+        let title: String
+        let body: String
+        switch status {
+        case .onTime:
+            return
+        case .delayed(let m):
+            title = L("Retard sur votre train")
+            body = "\(ticket.outbound.type.rawValue) · \(route) · " + String(format: L("retard d'environ %d min"), m)
+        case .disrupted(let r):
+            title = L("Perturbation sur votre ligne"); body = "\(route) · \(r)"
+        case .stopped(let r):
+            title = L("Train arrêté"); body = "\(route) · \(r)"
+        }
+        let key = "disrupt-\(ticket.id.uuidString)-\(status.notifKey)"
+        guard !UserDefaults.standard.bool(forKey: key) else { return }
+        requestAuthorization { granted in
+            guard granted else { return }
+            let content = UNMutableNotificationContent()
+            content.title = title; content.body = body; content.sound = .default
+            let req = UNNotificationRequest(identifier: key, content: content,
+                trigger: UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false))
+            UNUserNotificationCenter.current().add(req) { _ in }
+            UserDefaults.standard.set(true, forKey: key)
+        }
+    }
+
+    /// One-off "get ready, your station is approaching" alert near arrival.
+    static func notifyArrivalSoon(for ticket: Ticket) {
+        let key = "arrivesoon-\(ticket.id.uuidString)"
+        guard !UserDefaults.standard.bool(forKey: key) else { return }
+        requestAuthorization { granted in
+            guard granted else { return }
+            let content = UNMutableNotificationContent()
+            content.title = L("Votre gare approche")
+            content.body = String(format: L("Préparez-vous à descendre à %@ · voiture %d, place %@."),
+                                  ticket.outbound.to.name, ticket.coach, ticket.seat)
+            content.sound = .default
+            let req = UNNotificationRequest(identifier: key, content: content,
+                trigger: UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false))
+            UNUserNotificationCenter.current().add(req) { _ in }
+            UserDefaults.standard.set(true, forKey: key)
+        }
+    }
+
     static func cancelReminder(for ticket: Ticket) {
         UNUserNotificationCenter.current()
             .removePendingNotificationRequests(withIdentifiers: ["reminder-\(ticket.id)"])
