@@ -17,6 +17,9 @@ final class LocationManager: NSObject, ObservableObject, CLLocationManagerDelega
 
     private let manager = CLLocationManager()
 
+    /// Current system authorization status (for the in-app rationale primer).
+    var status: CLAuthorizationStatus { manager.authorizationStatus }
+
     override init() {
         super.init()
         manager.delegate = self

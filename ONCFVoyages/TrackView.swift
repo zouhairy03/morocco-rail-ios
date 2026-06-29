@@ -20,8 +20,10 @@ private struct Stop: Identifiable {
 struct TrackView: View {
     @EnvironmentObject var store: AppStore
     @ObservedObject private var loc = LocationManager.shared
+    @State private var showLocationPrimer = false
     @State private var now = Date()
     @State private var showMap = false
+    @State private var liveActivityOn = false
     // Ticks once a second — the train position is derived from the real clock,
     // so it advances at the true pace of the journey (not a fast fake loop).
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
@@ -78,6 +80,9 @@ struct TrackView: View {
                     let distKm = trainCoord.flatMap { loc.distanceKm(to: $0) }
                     VStack(spacing: 20) {
                         statusCard(t, status: status, progress: p, distanceKm: distKm)
+                        if #available(iOS 16.2, *) {
+                            liveActivityButton(t, status: status, progress: p)
+                        }
                         if mapStops.count >= 2 {
                             routeMapCard(mapStops,
                                          trainProgress: Double((p * 200).rounded() / 200),
@@ -100,21 +105,59 @@ struct TrackView: View {
             .navigationBarTitleDisplayMode(.inline)
         }
         .onAppear {
-            loc.request()
+            // Show an in-app rationale before the system prompt (only the first time).
+            switch loc.status {
+            case .notDetermined:                       showLocationPrimer = true
+            case .authorizedWhenInUse, .authorizedAlways: loc.startIfAuthorized()
+            default:                                   break   // denied/restricted — respect it
+            }
             if let t = ticket {
                 NotificationService.notifyDisruption(for: t, status: store.liveStatus(for: t))
             }
+            if #available(iOS 16.2, *) { liveActivityOn = TripActivityController.shared.isActive }
+        }
+        .sheet(isPresented: $showLocationPrimer) {
+            LocationPrimerView(
+                onAllow: { showLocationPrimer = false; loc.request() },
+                onSkip:  { showLocationPrimer = false })
+                .presentationDetents([.height(400)])
         }
         .onReceive(timer) { t in
             now = t
+            guard let tk = ticket else { return }
+            let s = store.liveStatus(for: tk)
+            let arrival = tk.outbound.arrive.addingTimeInterval(Double(s.delayMinutes) * 60)
+            let remMin = arrival.timeIntervalSince(t) / 60
+
             // "Get ready" alert when the destination is ~5 min away.
-            if let tk = ticket {
-                let s = store.liveStatus(for: tk)
-                let arrival = tk.outbound.arrive.addingTimeInterval(Double(s.delayMinutes) * 60)
-                let remMin = arrival.timeIntervalSince(t) / 60
-                if t >= tk.outbound.depart, remMin > 0, remMin <= 5 {
-                    NotificationService.notifyArrivalSoon(for: tk)
-                }
+            if t >= tk.outbound.depart, remMin > 0, remMin <= 5 {
+                NotificationService.notifyArrivalSoon(for: tk)
+            }
+
+            // Arrival: the journey is complete, OR the traveller's phone is at the
+            // destination station (whichever comes first).
+            let atDestination = StationGeo.coordinate(tk.outbound.to.name).flatMap { c in
+                loc.location.map { $0.distance(from: CLLocation(latitude: c.latitude, longitude: c.longitude)) }
+            }.map { $0 < 400 } ?? false
+            if t >= arrival || atDestination {
+                NotificationService.notifyArrived(for: tk)
+            }
+
+            // Hurry up: departure is imminent and the traveller is still far from
+            // the boarding station (i.e. not on the train yet).
+            let toDep = tk.outbound.depart.timeIntervalSince(t) / 60
+            if toDep > 0, toDep <= 15,
+               let dep = StationGeo.coordinate(tk.outbound.from.name),
+               let here = loc.location,
+               here.distance(from: CLLocation(latitude: dep.latitude, longitude: dep.longitude)) > 1200 {
+                NotificationService.notifyHurry(for: tk, minutes: Int(ceil(toDep)))
+            }
+
+            // Keep the lock-screen Live Activity in sync (and end it on arrival).
+            if #available(iOS 16.2, *), TripActivityController.shared.isActive {
+                let p = journeyProgress(tk, delay: s.delayMinutes)
+                TripActivityController.shared.update(activityState(tk, status: s, progress: p))
+                if t >= arrival { TripActivityController.shared.end(); liveActivityOn = false }
             }
         }
         .fullScreenCover(isPresented: $showMap) {
@@ -146,6 +189,73 @@ struct TrackView: View {
         case .disrupted:       return L("Trafic perturbé")
         case .stopped:         return L("Train arrêté")
         }
+    }
+
+    // MARK: Live Activity (lock screen / Dynamic Island)
+
+    @available(iOS 16.2, *)
+    private func activityState(_ t: Ticket, status: TrainStatus, progress: CGFloat) -> TripActivityAttributes.ContentState {
+        let arrival = t.outbound.arrive.addingTimeInterval(Double(status.delayMinutes) * 60)
+        let departed = now >= t.outbound.depart
+        let arrived = now >= arrival
+        let remaining = max(0, Int(arrival.timeIntervalSince(now) / 60))
+        let toDep = max(0, Int(t.outbound.depart.timeIntervalSince(now) / 60))
+        let headline: String
+        if arrived { headline = L("Arrivé à destination") }
+        else if departed { headline = String(format: L("%d min avant l'arrivée"), remaining) }
+        else { headline = String(format: L("Départ dans %d min"), toDep) }
+
+        // Intermediate cities the train passes through + the next one.
+        let all = stops(for: t)
+        let next = all.first(where: { progress < $0.position })
+        let intermediate = all.dropFirst().dropLast().map { Double($0.position) }
+
+        // Accident / slowdown line.
+        let disruption: String
+        switch status {
+        case .onTime:           disruption = ""
+        case .delayed(let m):   disruption = String(format: L("Ralentissement · retard ~%d min"), m)
+        case .disrupted(let r): disruption = r
+        case .stopped(let r):   disruption = r
+        }
+
+        return TripActivityAttributes.ContentState(
+            progress: Double((min(progress, 1) * 100).rounded() / 100),
+            departDate: t.outbound.depart,
+            arriveDate: arrival,
+            headline: headline,
+            statusText: departed ? statusText(status) : L("À quai"),
+            stopped: status.isStopped,
+            nextStop: arrived ? "" : (next?.name ?? t.outbound.to.name),
+            nextStopTime: next.map { Fmt.time.string(from: $0.time) } ?? "",
+            stopFractions: Array(intermediate),
+            disruption: disruption)
+    }
+
+    @available(iOS 16.2, *)
+    private func liveActivityButton(_ t: Ticket, status: TrainStatus, progress: CGFloat) -> some View {
+        Button {
+            Haptics.tap()
+            if TripActivityController.shared.isActive {
+                TripActivityController.shared.end(); liveActivityOn = false
+            } else {
+                TripActivityController.shared.start(
+                    reference: t.reference, from: t.outbound.from.name,
+                    to: t.outbound.to.name, line: t.outbound.type.rawValue,
+                    state: activityState(t, status: status, progress: progress))
+                liveActivityOn = true
+            }
+        } label: {
+            Label(liveActivityOn ? L("Arrêter le suivi sur l'écran verrouillé")
+                                 : L("Suivre sur l'écran verrouillé"),
+                  systemImage: liveActivityOn ? "lock.open.fill" : "lock.iphone")
+                .font(.subheadline.weight(.semibold))
+                .frame(maxWidth: .infinity).padding(.vertical, 13)
+                .background((liveActivityOn ? Color.red : Brand.orange).opacity(0.12), in: Capsule())
+                .foregroundStyle(liveActivityOn ? Color.red : Brand.orange)
+        }
+        .accessibilityLabel(Text(liveActivityOn ? L("Arrêter le suivi sur l'écran verrouillé")
+                                                : L("Suivre sur l'écran verrouillé")))
     }
 
     private func statusCard(_ t: Ticket, status: TrainStatus, progress: CGFloat, distanceKm: Double?) -> some View {
@@ -187,7 +297,8 @@ struct TrackView: View {
                         Text(L("vitesse")).font(.caption2).foregroundStyle(.white.opacity(0.6))
                     }
                 }
-                ProgressView(value: min(progress, 1)).tint(stopped ? sColor : Brand.orange2)
+                InDriveTrack(progress: min(progress, 1), stopped: stopped,
+                             fromLabel: t.outbound.from.name, toLabel: t.outbound.to.name)
                 HStack {
                     Label(departed ? statusText(status) : "\(L("Départ")) \(Fmt.time.string(from: t.outbound.depart))",
                           systemImage: departed ? status.icon : "clock")
@@ -492,6 +603,105 @@ struct FullRouteMapView: View {
         .padding(14)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
         .padding(.horizontal, 14).padding(.top, 6)
+    }
+}
+
+/// In-app rationale shown before the system location prompt, so the user
+/// understands why it's needed (improves the allow-rate and avoids a cold ask).
+struct LocationPrimerView: View {
+    var onAllow: () -> Void
+    var onSkip: () -> Void
+
+    var body: some View {
+        VStack(spacing: 16) {
+            ZStack {
+                Circle().fill(Brand.orange.opacity(0.12)).frame(width: 96, height: 96)
+                Image(systemName: "location.fill")
+                    .font(.system(size: 40, weight: .bold)).foregroundStyle(Brand.warm)
+            }
+            .padding(.top, 26)
+            .accessibilityHidden(true)
+
+            Text(L("Suivez votre train en direct"))
+                .font(.system(.title3, design: .rounded).weight(.bold))
+                .foregroundStyle(Brand.label).multilineTextAlignment(.center)
+            Text(L("Votre position vous situe sur la carte et calcule votre distance jusqu'au train et aux gares. Utilisée uniquement lorsque l'app est ouverte."))
+                .font(.subheadline).foregroundStyle(Brand.textSoft)
+                .multilineTextAlignment(.center).padding(.horizontal, 26)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Spacer(minLength: 8)
+
+            VStack(spacing: 10) {
+                Button(action: onAllow) {
+                    Text(L("Autoriser la localisation")).frame(maxWidth: .infinity)
+                }
+                .buttonStyle(PrimaryButtonStyle())
+
+                Button(action: onSkip) {
+                    Text(L("Plus tard")).font(.subheadline.weight(.semibold)).foregroundStyle(Brand.textSoft)
+                }
+            }
+            .padding(.horizontal, 24).padding(.bottom, 24)
+        }
+        .background(Brand.sand.ignoresSafeArea())
+    }
+}
+
+/// Horizontal ride-tracking-style bar: origin dot → moving train → destination
+/// ring on a dashed line. ONCF-branded; mirrors the familiar ride-hailing layout.
+struct InDriveTrack: View {
+    var progress: CGFloat
+    var stopped: Bool
+    var fromLabel: String
+    var toLabel: String
+
+    var body: some View {
+        VStack(spacing: 7) {
+            GeometryReader { geo in
+                let w = geo.size.width
+                let inset: CGFloat = 13
+                let y: CGFloat = 13
+                let x = inset + max(0, w - inset * 2) * min(max(progress, 0), 1)
+                ZStack(alignment: .topLeading) {
+                    // Full dashed track.
+                    Path { p in
+                        p.move(to: CGPoint(x: inset, y: y)); p.addLine(to: CGPoint(x: w - inset, y: y))
+                    }
+                    .stroke(style: StrokeStyle(lineWidth: 4, lineCap: .round, dash: [1, 8]))
+                    .foregroundColor(.white.opacity(0.28))
+                    // Travelled portion.
+                    Path { p in
+                        p.move(to: CGPoint(x: inset, y: y)); p.addLine(to: CGPoint(x: x, y: y))
+                    }
+                    .stroke(style: StrokeStyle(lineWidth: 4, lineCap: .round))
+                    .foregroundColor(stopped ? Color(hex: 0xFF6F61) : Brand.orange)
+                    // Origin dot.
+                    Circle().fill(.white).frame(width: 11, height: 11).position(x: inset, y: y)
+                    // Destination ring.
+                    Circle().strokeBorder(.white.opacity(0.6), lineWidth: 2.5)
+                        .frame(width: 11, height: 11).position(x: w - inset, y: y)
+                    // Moving train marker.
+                    Image(systemName: stopped ? "pause.fill" : "tram.fill")
+                        .font(.system(size: 11, weight: .bold)).foregroundColor(.white)
+                        .frame(width: 26, height: 26)
+                        .background(stopped ? Color(hex: 0xFF6F61) : Brand.orange, in: Circle())
+                        .overlay(Circle().strokeBorder(.white, lineWidth: 2))
+                        .shadow(color: Brand.orange.opacity(0.6), radius: 5)
+                        .position(x: x, y: y)
+                }
+            }
+            .frame(height: 26)
+            .animation(.easeInOut(duration: 0.6), value: progress)
+
+            HStack {
+                Text(fromLabel).font(.system(size: 9, weight: .semibold)).foregroundStyle(.white.opacity(0.6))
+                Spacer()
+                Text(toLabel).font(.system(size: 9, weight: .semibold)).foregroundStyle(.white.opacity(0.6))
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text("\(fromLabel) → \(toLabel), \(Int(progress * 100)) %"))
     }
 }
 

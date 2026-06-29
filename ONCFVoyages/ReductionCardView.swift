@@ -52,7 +52,7 @@ struct ReductionCardView: View {
                     Spacer()
                     HStack(alignment: .bottom) {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("TITULAIRE").font(.system(size: 8, weight: .semibold)).foregroundStyle(.white.opacity(0.7))
+                            Text(L("Titulaire").uppercased()).font(.system(size: 8, weight: .semibold)).foregroundStyle(.white.opacity(0.7))
                             Text(c.holder).font(.system(.subheadline, design: .rounded).weight(.bold)).foregroundStyle(.white)
                         }
                         Spacer()

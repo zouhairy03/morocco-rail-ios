@@ -6,14 +6,65 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		331FDFB02FF20DA400482F68 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 331FDFAF2FF20DA400482F68 /* WidgetKit.framework */; };
+		331FDFB22FF20DA400482F68 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 331FDFB12FF20DA400482F68 /* SwiftUI.framework */; };
+		331FDFC12FF20DA600482F68 /* ONCFWidgetsExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 331FDFAD2FF20DA400482F68 /* ONCFWidgetsExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		331FDFBF2FF20DA600482F68 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 1A0000000000000000000009 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 331FDFAC2FF20DA400482F68;
+			remoteInfo = ONCFWidgetsExtension;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		331FDFC22FF20DA600482F68 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				331FDFC12FF20DA600482F68 /* ONCFWidgetsExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
 		1A0000000000000000000004 /* ONCFVoyages.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ONCFVoyages.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		331FDFAD2FF20DA400482F68 /* ONCFWidgetsExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ONCFWidgetsExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		331FDFAF2FF20DA400482F68 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		331FDFB12FF20DA400482F68 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		331FDFC52FF20DA600482F68 /* Exceptions for "ONCFWidgets" folder in "ONCFWidgetsExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 331FDFAC2FF20DA400482F68 /* ONCFWidgetsExtension */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		1A0000000000000000000002 /* ONCFVoyages */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = ONCFVoyages;
+			sourceTree = "<group>";
+		};
+		331FDFB32FF20DA400482F68 /* ONCFWidgets */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				331FDFC52FF20DA600482F68 /* Exceptions for "ONCFWidgets" folder in "ONCFWidgetsExtension" target */,
+			);
+			path = ONCFWidgets;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -26,6 +77,15 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		331FDFAA2FF20DA400482F68 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				331FDFB22FF20DA400482F68 /* SwiftUI.framework in Frameworks */,
+				331FDFB02FF20DA400482F68 /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -33,6 +93,8 @@
 			isa = PBXGroup;
 			children = (
 				1A0000000000000000000002 /* ONCFVoyages */,
+				331FDFB32FF20DA400482F68 /* ONCFWidgets */,
+				331FDFAE2FF20DA400482F68 /* Frameworks */,
 				1A0000000000000000000003 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -41,8 +103,18 @@
 			isa = PBXGroup;
 			children = (
 				1A0000000000000000000004 /* ONCFVoyages.app */,
+				331FDFAD2FF20DA400482F68 /* ONCFWidgetsExtension.appex */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		331FDFAE2FF20DA400482F68 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				331FDFAF2FF20DA400482F68 /* WidgetKit.framework */,
+				331FDFB12FF20DA400482F68 /* SwiftUI.framework */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -55,10 +127,12 @@
 				1A0000000000000000000006 /* Sources */,
 				1A0000000000000000000005 /* Frameworks */,
 				1A0000000000000000000007 /* Resources */,
+				331FDFC22FF20DA600482F68 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				331FDFC02FF20DA600482F68 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				1A0000000000000000000002 /* ONCFVoyages */,
@@ -67,6 +141,28 @@
 			productName = ONCFVoyages;
 			productReference = 1A0000000000000000000004 /* ONCFVoyages.app */;
 			productType = "com.apple.product-type.application";
+		};
+		331FDFAC2FF20DA400482F68 /* ONCFWidgetsExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 331FDFC62FF20DA600482F68 /* Build configuration list for PBXNativeTarget "ONCFWidgetsExtension" */;
+			buildPhases = (
+				331FDFA92FF20DA400482F68 /* Sources */,
+				331FDFAA2FF20DA400482F68 /* Frameworks */,
+				331FDFAB2FF20DA400482F68 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				331FDFB32FF20DA400482F68 /* ONCFWidgets */,
+			);
+			name = ONCFWidgetsExtension;
+			packageProductDependencies = (
+			);
+			productName = ONCFWidgetsExtension;
+			productReference = 331FDFAD2FF20DA400482F68 /* ONCFWidgetsExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -79,6 +175,9 @@
 				LastUpgradeCheck = 2610;
 				TargetAttributes = {
 					1A0000000000000000000008 = {
+						CreatedOnToolsVersion = 26.1.1;
+					};
+					331FDFAC2FF20DA400482F68 = {
 						CreatedOnToolsVersion = 26.1.1;
 					};
 				};
@@ -97,12 +196,20 @@
 			projectRoot = "";
 			targets = (
 				1A0000000000000000000008 /* ONCFVoyages */,
+				331FDFAC2FF20DA400482F68 /* ONCFWidgetsExtension */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		1A0000000000000000000007 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		331FDFAB2FF20DA400482F68 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -119,7 +226,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		331FDFA92FF20DA400482F68 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		331FDFC02FF20DA600482F68 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 331FDFAC2FF20DA400482F68 /* ONCFWidgetsExtension */;
+			targetProxy = 331FDFBF2FF20DA600482F68 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		1A000000000000000000000C /* Debug */ = {
@@ -129,6 +251,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = C4RV38LXMF;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "ONCF Voyages";
@@ -160,6 +283,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = C4RV38LXMF;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "ONCF Voyages";
@@ -301,6 +425,70 @@
 			};
 			name = Release;
 		};
+		331FDFC32FF20DA600482F68 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = C4RV38LXMF;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ONCFWidgets/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = ONCFWidgets;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.1;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.oncf.voyages.ONCFWidgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		331FDFC42FF20DA600482F68 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = C4RV38LXMF;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ONCFWidgets/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = ONCFWidgets;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.1;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.oncf.voyages.ONCFWidgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -318,6 +506,15 @@
 			buildConfigurations = (
 				1A000000000000000000000E /* Debug */,
 				1A000000000000000000000F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		331FDFC62FF20DA600482F68 /* Build configuration list for PBXNativeTarget "ONCFWidgetsExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				331FDFC32FF20DA600482F68 /* Debug */,
+				331FDFC42FF20DA600482F68 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

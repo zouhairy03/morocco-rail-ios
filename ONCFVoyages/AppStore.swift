@@ -132,6 +132,14 @@ final class AppStore: ObservableObject {
     /// alerts (swap `serviceAlerts` for the ONCF status API to make it real).
     func liveStatus(for ticket: Ticket) -> TrainStatus {
         let t = ticket.outbound
+        // Live status only applies around the journey itself. A trip in the
+        // future (e.g. booked for tomorrow) is simply "scheduled / on time" —
+        // no live delays or disruption alerts until it's nearly under way.
+        let now = Date()
+        let windowStart = t.depart.addingTimeInterval(-90 * 60)            // 90 min before departure
+        let windowEnd   = t.arrive.addingTimeInterval(60 * 60)             // 1 h after scheduled arrival
+        guard now >= windowStart, now <= windowEnd else { return .onTime }
+
         let line = t.type.rawValue
         let from = t.from.name, to = t.to.name
         guard let alert = serviceAlerts.first(where: {

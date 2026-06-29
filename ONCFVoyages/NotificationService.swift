@@ -97,6 +97,43 @@ enum NotificationService {
         }
     }
 
+    /// One-off "you've reached your destination" alert.
+    static func notifyArrived(for ticket: Ticket) {
+        let key = "arrived-\(ticket.id.uuidString)"
+        guard !UserDefaults.standard.bool(forKey: key) else { return }
+        requestAuthorization { granted in
+            guard granted else { return }
+            let content = UNMutableNotificationContent()
+            content.title = L("Vous êtes arrivé !") + " 🎉"
+            content.body = String(format: L("Bienvenue à %@. Merci d'avoir voyagé avec ONCF."),
+                                  ticket.outbound.to.name)
+            content.sound = .default
+            let req = UNNotificationRequest(identifier: key, content: content,
+                trigger: UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false))
+            UNUserNotificationCenter.current().add(req) { _ in }
+            UserDefaults.standard.set(true, forKey: key)
+        }
+    }
+
+    /// One-off "hurry up — your train is about to leave and you're not at the
+    /// station yet" alert.
+    static func notifyHurry(for ticket: Ticket, minutes: Int) {
+        let key = "hurry-\(ticket.id.uuidString)"
+        guard !UserDefaults.standard.bool(forKey: key) else { return }
+        requestAuthorization { granted in
+            guard granted else { return }
+            let content = UNMutableNotificationContent()
+            content.title = L("Dépêchez-vous !") + " 🏃"
+            content.body = String(format: L("Votre train part dans %d min — rejoignez vite %@."),
+                                  max(1, minutes), ticket.outbound.from.name)
+            content.sound = .default
+            let req = UNNotificationRequest(identifier: key, content: content,
+                trigger: UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false))
+            UNUserNotificationCenter.current().add(req) { _ in }
+            UserDefaults.standard.set(true, forKey: key)
+        }
+    }
+
     static func cancelReminder(for ticket: Ticket) {
         UNUserNotificationCenter.current()
             .removePendingNotificationRequests(withIdentifiers: ["reminder-\(ticket.id)"])
